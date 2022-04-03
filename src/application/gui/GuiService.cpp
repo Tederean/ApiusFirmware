@@ -23,6 +23,11 @@ namespace Services
 
     const size_t GaugeCount = 1;
 
+    const lv_coord_t ArcSize = 400;
+
+    const lv_coord_t ArcIndicatorSize = 40;
+
+
     Gauge Gauges[GaugeCount];
 
     lv_style_t ScreenStyle;
@@ -76,7 +81,7 @@ namespace Services
 
       temperatureGauge->Arc = arc;
 
-      lv_obj_set_size(arc, 400, 400);
+      lv_obj_set_size(arc, ArcSize, ArcSize);
       lv_arc_set_end_angle(arc, 200);
       lv_obj_align(arc, LV_ALIGN_CENTER, 0, 0);
       lv_arc_set_range(arc, 0, 10500);
@@ -85,9 +90,11 @@ namespace Services
 
       lv_style_set_bg_color(indicatorStyle, backgroundColor);
       lv_style_set_arc_color(indicatorStyle, filledColor);
+      lv_style_set_arc_width(indicatorStyle, ArcIndicatorSize);
 
       lv_style_set_bg_color(mainStyle, backgroundColor);
       lv_style_set_arc_color(mainStyle, emptyColor);
+      lv_style_set_arc_width(mainStyle, ArcIndicatorSize);
 
 
       lv_obj_remove_style(arc, NULL, LV_PART_KNOB);
