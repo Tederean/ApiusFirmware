@@ -59,7 +59,7 @@ public:
       cfg.dummy_read_bits  =     1;
       cfg.readable         =  true;
       cfg.invert           = false;
-      cfg.rgb_order        = false;
+      cfg.rgb_order        =  true;
       cfg.dlen_16bit       = false;
       cfg.bus_shared       =  true;
 
