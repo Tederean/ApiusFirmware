@@ -19,6 +19,7 @@ namespace Services
       const char *Unit;
       const float MinValue;
       const float MaxValue;
+      lv_anim_exec_xcb_t UpdateCallback;
       lv_obj_t *Arc;
       lv_obj_t *Title;
       lv_style_t IndicatorStyle;
@@ -26,6 +27,42 @@ namespace Services
       lv_style_t TitleStyle;
       lv_anim_t IndicatorAnimation;
     } Gauge;
+
+
+
+    void Initialize();
+
+    void DrawSeperationLine(lv_obj_t *parent, lv_color_t lineColor);
+
+    void SetScreenBackground(lv_obj_t *screen, lv_color_t backgroundColor);
+
+    void DrawTitles(lv_obj_t *parent, lv_color_t textColor);
+
+    void DrawArcs(lv_obj_t *parent, lv_color_t backgroundColor, lv_color_t emptyColor);
+
+    void DrawArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor);
+
+    void OnArcUpdateEvent(void *args);
+
+    void OnCpuUtilizationUpdate(void *component, int32_t value);
+
+    void OnCpuWattageUpdate(void *component, int32_t value);
+
+    void OnCpuTemperatureUpdate(void *component, int32_t value);
+
+    void OnCpuMemoryUpdate(void *component, int32_t value);
+
+    void OnGpuUtilizationUpdate(void *component, int32_t value);
+
+    void OnGpuWattageUpdate(void *component, int32_t value);
+
+    void OnGpuTemperatureUpdate(void *component, int32_t value);
+
+    void OnGpuMemoryUpdate(void *component, int32_t value);
+    
+    void OnAnimationUpdate(Gauge *gaugeStruct, int32_t arcValue);
+
+
 
     const timespan_t ArcUpdateInterval_us = 1 * 1000 * 1000;
 
@@ -38,6 +75,7 @@ namespace Services
         .Unit = "%",
         .MinValue = 0.0f,
         .MaxValue = 100.0f,
+        .UpdateCallback = OnCpuUtilizationUpdate,
       },
 
       {
@@ -45,6 +83,7 @@ namespace Services
         .Unit = "W",
         .MinValue = 0.0f,
         .MaxValue = 105.0f,
+        .UpdateCallback = OnCpuWattageUpdate,
       },
 
       {
@@ -52,6 +91,7 @@ namespace Services
         .Unit = "°C",
         .MinValue = 0.0f,
         .MaxValue = 105.0f,
+        .UpdateCallback = OnCpuTemperatureUpdate,
       },
 
       {
@@ -59,6 +99,7 @@ namespace Services
         .Unit = "B",
         .MinValue = 0.0f,
         .MaxValue = 32767.0f,
+        .UpdateCallback = OnCpuMemoryUpdate,
       },
 
       {
@@ -66,6 +107,7 @@ namespace Services
         .Unit = "%",
         .MinValue = 0.0f,
         .MaxValue = 100.0f,
+        .UpdateCallback = OnGpuUtilizationUpdate,
       },
 
       {
@@ -73,6 +115,7 @@ namespace Services
         .Unit = "W",
         .MinValue = 0.0f,
         .MaxValue = 105.0f,
+        .UpdateCallback = OnGpuWattageUpdate,
       },
 
       {
@@ -80,6 +123,7 @@ namespace Services
         .Unit = "°C",
         .MinValue = 0.0f,
         .MaxValue = 105.0f,
+        .UpdateCallback = OnGpuTemperatureUpdate,
       },
 
       {
@@ -87,6 +131,7 @@ namespace Services
         .Unit = "B",
         .MinValue = 0.0f,
         .MaxValue = 32767.0f,
+        .UpdateCallback = OnGpuMemoryUpdate,
       },
     };
 
@@ -121,23 +166,6 @@ namespace Services
     const lv_coord_t LineHeight = 480 - GridSpacing - GridSpacing;
 
 
-    void Initialize();
-
-    void DrawSeperationLine(lv_obj_t *parent, lv_color_t lineColor);
-
-    void SetScreenBackground(lv_obj_t *screen, lv_color_t backgroundColor);
-
-    void DrawTitles(lv_obj_t *parent, lv_color_t textColor);
-
-    void DrawArcs(lv_obj_t *parent, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t filledColor);
-
-    void DrawArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t filledColor);
-
-    void OnArcUpdateEvent(void *args);
-
-    void OnAnimationSetValue(void *arc, int32_t value);
-
-
 
     void Initialize()
     {
@@ -146,7 +174,6 @@ namespace Services
 
       auto gray80 = lv_color_make(0x33, 0x33, 0x33);
       auto gray50 = lv_color_make(0x7F, 0x7F, 0x7F);
-      auto red = lv_color_make(0xFF, 0x00, 0x00);
 
 
       SetScreenBackground(screen, gray80);
@@ -155,7 +182,7 @@ namespace Services
 
       DrawTitles(screen, gray50);
 
-      DrawArcs(screen, gray80, gray50, red);
+      DrawArcs(screen, gray80, gray50);
     }
 
     void DrawSeperationLine(lv_obj_t *parent, lv_color_t lineColor)
@@ -201,7 +228,7 @@ namespace Services
       }
     }
 
-    void DrawArcs(lv_obj_t *parent, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t filledColor)
+    void DrawArcs(lv_obj_t *parent, lv_color_t backgroundColor, lv_color_t emptyColor)
     {
       auto y0 = GridSpacing + TitleHight + 1;
       auto y1 = GridSpacing + TitleHight + ArcHeight + GridSpacing + 1;
@@ -212,21 +239,21 @@ namespace Services
       auto x3 = GridSpacing + ArcWidth + GridSpacing + ArcWidth + GridSpacing + LineThickness + GridSpacing + ArcWidth + GridSpacing + 1;
 
 
-      DrawArc(parent, 0, x0, y0, backgroundColor, emptyColor, filledColor);
-      DrawArc(parent, 1, x1, y0, backgroundColor, emptyColor, filledColor);
-      DrawArc(parent, 2, x0, y1, backgroundColor, emptyColor, filledColor);
-      DrawArc(parent, 3, x1, y1, backgroundColor, emptyColor, filledColor);
+      DrawArc(parent, 0, x0, y0, backgroundColor, emptyColor);
+      DrawArc(parent, 1, x1, y0, backgroundColor, emptyColor);
+      DrawArc(parent, 2, x0, y1, backgroundColor, emptyColor);
+      DrawArc(parent, 3, x1, y1, backgroundColor, emptyColor);
 
-      DrawArc(parent, 4, x2, y0, backgroundColor, emptyColor, filledColor);
-      DrawArc(parent, 5, x3, y0, backgroundColor, emptyColor, filledColor);
-      DrawArc(parent, 6, x2, y1, backgroundColor, emptyColor, filledColor);
-      DrawArc(parent, 7, x3, y1, backgroundColor, emptyColor, filledColor);
+      DrawArc(parent, 4, x2, y0, backgroundColor, emptyColor);
+      DrawArc(parent, 5, x3, y0, backgroundColor, emptyColor);
+      DrawArc(parent, 6, x2, y1, backgroundColor, emptyColor);
+      DrawArc(parent, 7, x3, y1, backgroundColor, emptyColor);
 
       ArcUpdateEvent.Subscribe(OnArcUpdateEvent);
       Services::System::InvokeLater(&ArcUpdateEvent, ArcUpdateInterval_us, SchedulingBehaviour::FixedPeriodSkipTicks);
     }
 
-    void DrawArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t filledColor)
+    void DrawArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor)
     {
       auto gaugeStruct = &Gauges[index];
 
@@ -246,7 +273,7 @@ namespace Services
 
 
         lv_style_set_bg_color(indicatorStyle, backgroundColor);
-        lv_style_set_arc_color(indicatorStyle, filledColor);
+        lv_style_set_arc_color(indicatorStyle, emptyColor);
         lv_style_set_arc_width(indicatorStyle, ArcIndicatorSize);
 
         lv_style_set_bg_color(mainStyle, backgroundColor);
@@ -297,11 +324,11 @@ namespace Services
           auto arc = gaugeStruct->Arc;
 
           auto currentArcValue = lv_arc_get_value(arc);
-          auto nextArcValue = (int16_t)Math::Map<float>(nextValue, gaugeStruct->MinValue, gaugeStruct->MaxValue, 0, 32767);
+          auto nextArcValue = (int16_t)Math::Map<float>(nextValue, gaugeStruct->MinValue, gaugeStruct->MaxValue, 0.0f, 32767.0f);
 
           auto indicatorAnimation = &gaugeStruct->IndicatorAnimation;
 
-          lv_anim_set_exec_cb(indicatorAnimation, OnAnimationSetValue); 
+          lv_anim_set_exec_cb(indicatorAnimation, gaugeStruct->UpdateCallback); 
           lv_anim_set_values(indicatorAnimation, currentArcValue, nextArcValue);
           lv_anim_set_var(indicatorAnimation, arc);
           lv_anim_set_time(indicatorAnimation, 950);
@@ -312,30 +339,59 @@ namespace Services
       }
     }
 
-    void OnAnimationSetValue(void *component, int32_t value)
+    void OnCpuUtilizationUpdate(void *component, int32_t value)
     {
-      auto arc = (lv_obj_t*)component;
+      OnAnimationUpdate(&Gauges[0], value);
+    }
 
-      lv_arc_set_value(arc, value);
+    void OnCpuWattageUpdate(void *component, int32_t value)
+    {
+      OnAnimationUpdate(&Gauges[1], value);
     }
     
+    void OnCpuTemperatureUpdate(void *component, int32_t value)
+    {
+      OnAnimationUpdate(&Gauges[2], value);
+    }
+    
+    void OnCpuMemoryUpdate(void *component, int32_t value)
+    {
+      OnAnimationUpdate(&Gauges[3], value);
+    }
+
+    void OnGpuUtilizationUpdate(void *component, int32_t value)
+    {
+      OnAnimationUpdate(&Gauges[4], value);
+    }
+
+    void OnGpuWattageUpdate(void *component, int32_t value)
+    {
+      OnAnimationUpdate(&Gauges[5], value);
+    }
+    
+    void OnGpuTemperatureUpdate(void *component, int32_t value)
+    {
+      OnAnimationUpdate(&Gauges[6], value);
+    }
+    
+    void OnGpuMemoryUpdate(void *component, int32_t value)
+    {
+      OnAnimationUpdate(&Gauges[7], value);
+    }
+
+    void OnAnimationUpdate(Gauge *gaugeStruct, int32_t arcValue)
+    {
+      auto arc = gaugeStruct->Arc;
+      auto indicatorStyle = &gaugeStruct->IndicatorStyle;
+
+      auto hue = (uint16_t)Math::Map<int16_t>(arcValue, 0, 32767, 105, 0);
+      auto color = lv_color_hsv_to_rgb(hue, 75, 92);
+
+
+      lv_style_set_arc_color(indicatorStyle, color);
+
+      lv_arc_set_value(arc, arcValue);
+    }
+
   } // namespace Display
 } // namespace Services
-
-
-
-
-    //if (value < (0.7 * this.max))
-    //{
-    //   return "#5ee432"; // green
-    //} 
-    //if (value < (0.8 * this.max))
-    //{
-    //  return "#fffa50"; // yellow
-    //}
-    //if (value < (0.9 * this.max))
-    //{
-    //  return "#f7aa38"; // orange
-    //}
-    //
-    //return "#ef4655"; // red
