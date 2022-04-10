@@ -18,9 +18,9 @@ namespace Services
 
     const timespan_t LvglRenderInterval_us = 5 * 1000;
 
-    static const uint32_t ScreenWidth  = 800;
+    const lv_coord_t ScreenWidth  = 800;
 
-    static const uint32_t ScreenHeight = 480;
+    const lv_coord_t ScreenHeight = 480;
 
 
     LGFX tft;
@@ -28,11 +28,11 @@ namespace Services
     Event<void> LvglRenderEvent;
 
 
-    static lv_disp_draw_buf_t DisplayBuffer;
+    lv_disp_draw_buf_t DisplayBuffer;
 
-    static lv_color_t ByteBuffer[ScreenWidth * 10];
+    lv_color_t ByteBuffer[ScreenWidth * 10];
 
-    static lv_disp_drv_t DisplayDriver;
+    lv_disp_drv_t DisplayDriver;
 
 
     void Initialize();
