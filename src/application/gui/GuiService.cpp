@@ -2,6 +2,7 @@
 
 #include <lvgl.h>
 #include <application/gui/GuiService.h>
+#include <application/utils/Formatter.h>
 #include <framework/services/SystemService.h>
 #include <framework/common/Event.h>
 #include <framework/utils/Math.h>
@@ -17,7 +18,7 @@ namespace Services
     {
       Integer,
       ThreeDigitsMegaByte,
-    };
+    } RoundMode;
 
     typedef struct Gauge
     {
@@ -93,7 +94,7 @@ namespace Services
         .TitleText = "Memory",
         .Unit = "B",
         .MinValue = 0.0f,
-        .MaxValue = 32767.0f,
+        .MaxValue = 32768.0f,
         .ValueRounding = RoundMode::ThreeDigitsMegaByte,
       },
 
@@ -369,12 +370,11 @@ namespace Services
 
           if (gaugeStruct->ValueRounding == RoundMode::ThreeDigitsMegaByte)
           {
-            char stringBuilder[10];
+            char formattedValue[15];
 
-            sprintf(stringBuilder, "%.0f ", nextValue);
-            strcat(stringBuilder, gaugeStruct->Unit);
+            Formatter::FormatForBinary(nextValue * 1024.0f * 1024.f, gaugeStruct->Unit, formattedValue);
 
-            lv_label_set_text(valueLabel, stringBuilder);
+            lv_label_set_text(valueLabel, formattedValue);
           }
         }
 
