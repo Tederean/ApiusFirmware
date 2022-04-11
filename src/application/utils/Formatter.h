@@ -21,24 +21,20 @@ namespace Formatter
       
     if (digitsCountBeforeDecimalSeparator < requestedDigits)
     {
-      value *= (requestedDigits - digitsCountBeforeDecimalSeparator) * 10.0f;
+      value *= pow(10.0f, requestedDigits - digitsCountBeforeDecimalSeparator);
     }
 
     value = roundf(value);
       
     if (digitsCountBeforeDecimalSeparator < requestedDigits)
     {
-      value *= (requestedDigits - digitsCountBeforeDecimalSeparator) * 0.1f;
+      value *= pow(0.1f, requestedDigits - digitsCountBeforeDecimalSeparator);
     }
       
     return value;
   }
 
-
-
-
-  
-  void FormatForBinary(float value, const char* unit, char* output)
+  void FormatForBinary(float value, const char* unit, char* output, size_t outputLength)
   {
     auto unitCounter = (uint8_t)0;
     
@@ -47,9 +43,9 @@ namespace Formatter
         value /= 1024.0f;
         unitCounter++;
     }
-    
+
     auto roundedValue = RoundToNDigits(value, 3);
-    
+
     if (roundedValue >= 1000.0f)
     {
         value /= 1024.0f;
@@ -62,33 +58,38 @@ namespace Formatter
 
 
     char formatString[10];
+    size_t formatStringLength = sizeof(formatString) / sizeof(char);
 
-    strcpy(formatString, "%.");
-    sprintf(formatString + 2, "%i", digitsCountAfterDecimalSeparator);
-    strcat(formatString, "f");
+    strncpy(formatString, "%.", formatStringLength);
+    snprintf(formatString +2, formatStringLength -2, "%i", digitsCountAfterDecimalSeparator);
+    strncat(formatString, "f", formatStringLength);
 
 
-    sprintf(output, formatString, roundedValue);
-    strcat(output, " ");
+    snprintf(output, outputLength, formatString, roundedValue);
+    strncat(output, " ", outputLength);
 
     if (unitCounter == 1)
     {
-      strcat(output, "Ki");
+      strncat(output, "Ki", outputLength);
     }
     if (unitCounter == 2)
     {
-      strcat(output, "Mi");
+      strncat(output, "Mi", outputLength);
     }
     if (unitCounter == 3)
     {
-      strcat(output, "Gi");
+      strncat(output, "Gi", outputLength);
     }
     if (unitCounter == 4)
     {
-      strcat(output, "Ti");
+      strncat(output, "Ti", outputLength);
+    }
+    if (unitCounter == 5)
+    {
+      strncat(output, "Pi", outputLength);
     }
 
-    strcat(output, unit);
+    strncat(output, unit, outputLength);
   }
 
 } // namespace Formatter

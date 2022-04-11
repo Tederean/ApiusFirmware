@@ -17,7 +17,7 @@ namespace Services
     typedef enum RoundMode
     {
       Integer,
-      ThreeDigitsMegaByte,
+      ThreeDigitsBinary,
     } RoundMode;
 
     typedef struct Gauge
@@ -60,10 +60,6 @@ namespace Services
 
 
 
-    const timespan_t ArcUpdateInterval_us = 1 * 1000 * 1000;
-
-    const size_t GaugeCount = 8;
-
     Gauge Gauges[] =
     {
       {
@@ -95,7 +91,7 @@ namespace Services
         .Unit = "B",
         .MinValue = 0.0f,
         .MaxValue = 32768.0f,
-        .ValueRounding = RoundMode::ThreeDigitsMegaByte,
+        .ValueRounding = RoundMode::ThreeDigitsBinary,
       },
 
       {
@@ -127,9 +123,15 @@ namespace Services
         .Unit = "B",
         .MinValue = 0.0f,
         .MaxValue = 8192.0f,
-        .ValueRounding = RoundMode::ThreeDigitsMegaByte,
+        .ValueRounding = RoundMode::ThreeDigitsBinary,
       },
     };
+
+
+    const timespan_t ArcUpdateInterval_us = 1 * 1000 * 1000;
+
+    const size_t GaugeCount = sizeof(Gauges) / sizeof(Gauge);
+
 
     Event<void> ArcUpdateEvent;
 
@@ -357,22 +359,23 @@ namespace Services
         {
           auto valueLabel = gaugeStruct->ValueLabel;
 
-
           if (gaugeStruct->ValueRounding == RoundMode::Integer)
           {
-            char stringBuilder[10];
+            char stringBuilder[15];
+            size_t stringBuilderLength = sizeof(stringBuilder) / sizeof(char);
 
-            sprintf(stringBuilder, "%.0f ", nextValue);
-            strcat(stringBuilder, gaugeStruct->Unit);
+            snprintf(stringBuilder, stringBuilderLength, "%.0f ", nextValue);
+            strncat(stringBuilder, gaugeStruct->Unit, stringBuilderLength);
 
             lv_label_set_text(valueLabel, stringBuilder);
           }
 
-          if (gaugeStruct->ValueRounding == RoundMode::ThreeDigitsMegaByte)
+          if (gaugeStruct->ValueRounding == RoundMode::ThreeDigitsBinary)
           {
             char formattedValue[15];
+            size_t formattedValueLength = sizeof(formattedValue) / sizeof(char);
 
-            Formatter::FormatForBinary(nextValue * 1024.0f * 1024.f, gaugeStruct->Unit, formattedValue);
+            Formatter::FormatForBinary(nextValue * 1024.0f * 1024.0f, gaugeStruct->Unit, formattedValue, formattedValueLength);
 
             lv_label_set_text(valueLabel, formattedValue);
           }
