@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include <lvgl.h>
+#include <application/utils/CommunicationData.h>
 #include <application/gui/GuiService.h>
 #include <application/utils/Formatter.h>
 #include <framework/services/SystemService.h>
@@ -54,7 +55,9 @@ namespace Services
 
     void DrawArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor);
 
-    void OnArcUpdateEvent(void *args);
+    void Update(CommunicationData *communicationData);
+
+    void Update(Gauge *gaugeStruct, float nextValue);
 
     void OnAnimationUpdate(void *component, int32_t value);
 
@@ -106,7 +109,7 @@ namespace Services
         .TitleText = "Wattage",
         .Unit = "W",
         .MinValue = 0.0f,
-        .MaxValue = 105.0f,
+        .MaxValue = 230.0f,
         .ValueRounding = RoundMode::Integer,
       },
 
@@ -131,9 +134,6 @@ namespace Services
     const timespan_t ArcUpdateInterval_us = 1 * 1000 * 1000;
 
     const size_t GaugeCount = sizeof(Gauges) / sizeof(Gauge);
-
-
-    Event<void> ArcUpdateEvent;
 
 
     lv_style_t ScreenStyle;
@@ -264,9 +264,6 @@ namespace Services
       DrawArc(parent, 5, x3, y0, backgroundColor, emptyColor, fillColor, textColor);
       DrawArc(parent, 6, x2, y1, backgroundColor, emptyColor, fillColor, textColor);
       DrawArc(parent, 7, x3, y1, backgroundColor, emptyColor, fillColor, textColor);
-
-      ArcUpdateEvent.Subscribe(OnArcUpdateEvent);
-      Services::System::InvokeLater(&ArcUpdateEvent, ArcUpdateInterval_us, SchedulingBehaviour::FixedPeriodSkipTicks);
     }
 
     void DrawArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor)
@@ -346,59 +343,64 @@ namespace Services
       }
     }
 
-    void OnArcUpdateEvent(void *args)
+
+    void Update(CommunicationData *communicationData)
     {
-      for (size_t index = 0; index < GaugeCount; index++)
+      Update(&Gauges[0], communicationData->CpuUtilization);
+      Update(&Gauges[1], communicationData->CpuWattage);
+      Update(&Gauges[2], communicationData->CpuTemperature);
+      Update(&Gauges[3], communicationData->CpuMemory);
+
+      Update(&Gauges[4], communicationData->GpuUtilization);
+      Update(&Gauges[5], communicationData->GpuWattage);
+      Update(&Gauges[6], communicationData->GpuTemperature);
+      Update(&Gauges[7], communicationData->GpuMemory);
+    }
+
+    void Update(Gauge *gaugeStruct, float nextValue)
+    {
       {
-        auto gaugeStruct = &Gauges[index];
+        auto valueLabel = gaugeStruct->ValueLabel;
 
-        auto minValue = gaugeStruct->MinValue;
-        auto maxValue = gaugeStruct->MaxValue;
-        auto nextValue = random(minValue * 100.0f, maxValue * 100.0f) / 100.0f;
-
+        if (gaugeStruct->ValueRounding == RoundMode::Integer)
         {
-          auto valueLabel = gaugeStruct->ValueLabel;
+          char stringBuilder[15];
+          size_t stringBuilderLength = sizeof(stringBuilder) / sizeof(char);
 
-          if (gaugeStruct->ValueRounding == RoundMode::Integer)
-          {
-            char stringBuilder[15];
-            size_t stringBuilderLength = sizeof(stringBuilder) / sizeof(char);
+          snprintf(stringBuilder, stringBuilderLength, "%.0f ", nextValue);
+          strncat(stringBuilder, gaugeStruct->Unit, stringBuilderLength);
 
-            snprintf(stringBuilder, stringBuilderLength, "%.0f ", nextValue);
-            strncat(stringBuilder, gaugeStruct->Unit, stringBuilderLength);
-
-            lv_label_set_text(valueLabel, stringBuilder);
-          }
-
-          if (gaugeStruct->ValueRounding == RoundMode::ThreeDigitsBinary)
-          {
-            char formattedValue[15];
-            size_t formattedValueLength = sizeof(formattedValue) / sizeof(char);
-
-            Formatter::FormatForBinary(nextValue * 1024.0f * 1024.0f, gaugeStruct->Unit, formattedValue, formattedValueLength);
-
-            lv_label_set_text(valueLabel, formattedValue);
-          }
+          lv_label_set_text(valueLabel, stringBuilder);
         }
 
+        if (gaugeStruct->ValueRounding == RoundMode::ThreeDigitsBinary)
         {
-          auto arc = gaugeStruct->Arc;
+          char formattedValue[15];
+          size_t formattedValueLength = sizeof(formattedValue) / sizeof(char);
 
-          auto currentArcValue = lv_arc_get_value(arc);
-          auto mappedNextValue = Math::Map<float>(nextValue, gaugeStruct->MinValue, gaugeStruct->MaxValue, 0.0f, 32767.0f);
-          auto nextArcValue = (int16_t)Math::Clamp<float>(roundf(mappedNextValue), 0.0f, 32767.0f);
+          Formatter::FormatForBinary(nextValue * 1024.0f * 1024.0f, gaugeStruct->Unit, formattedValue, formattedValueLength);
 
-
-          auto indicatorAnimation = &gaugeStruct->IndicatorAnimation;
-
-          lv_anim_set_exec_cb(indicatorAnimation, OnAnimationUpdate); 
-          lv_anim_set_values(indicatorAnimation, currentArcValue, nextArcValue);
-          lv_anim_set_var(indicatorAnimation, arc);
-          lv_anim_set_time(indicatorAnimation, 950);
-          lv_anim_set_path_cb(indicatorAnimation, lv_anim_path_ease_in_out);
-
-          lv_anim_start(indicatorAnimation);
+          lv_label_set_text(valueLabel, formattedValue);
         }
+      }
+
+      {
+        auto arc = gaugeStruct->Arc;
+
+        auto currentArcValue = lv_arc_get_value(arc);
+        auto mappedNextValue = Math::Map<float>(nextValue, gaugeStruct->MinValue, gaugeStruct->MaxValue, 0.0f, 32767.0f);
+        auto nextArcValue = (int16_t)Math::Clamp<float>(roundf(mappedNextValue), 0.0f, 32767.0f);
+
+
+        auto indicatorAnimation = &gaugeStruct->IndicatorAnimation;
+
+        lv_anim_set_exec_cb(indicatorAnimation, OnAnimationUpdate); 
+        lv_anim_set_values(indicatorAnimation, currentArcValue, nextArcValue);
+        lv_anim_set_var(indicatorAnimation, arc);
+        lv_anim_set_time(indicatorAnimation, 950);
+        lv_anim_set_path_cb(indicatorAnimation, lv_anim_path_ease_in_out);
+
+        lv_anim_start(indicatorAnimation);
       }
     }
 
