@@ -1,8 +1,6 @@
-#ifndef _GuiService_
-#define _GuiService_
+#pragma once
 
 #include <Arduino.h>
-#include <application/utils/CommunicationData.h>
 
 using namespace std;
 
@@ -12,10 +10,5 @@ namespace Services
   {
 
     void Initialize();
-
-    void Update(CommunicationData *communicationData);
-
-  } // namespace Gui
-} // namespace Services
-
-#endif
+  }
+}

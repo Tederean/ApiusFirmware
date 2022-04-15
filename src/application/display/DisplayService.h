@@ -1,5 +1,4 @@
-#ifndef _DisplayService_
-#define _DisplayService_
+#pragma once
 
 #include <Arduino.h>
 
@@ -14,5 +13,3 @@ namespace Services
 
   } // namespace Display
 } // namespace Services
-
-#endif

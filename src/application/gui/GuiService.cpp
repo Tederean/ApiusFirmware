@@ -1,9 +1,8 @@
 #include <Arduino.h>
 
 #include <lvgl.h>
-#include <application/utils/CommunicationData.h>
 #include <application/gui/GuiService.h>
-#include <application/utils/Formatter.h>
+#include <application/communication/CommunicationService.h>
 #include <framework/services/SystemService.h>
 #include <framework/common/Event.h>
 #include <framework/utils/Math.h>
@@ -15,20 +14,8 @@ namespace Services
   namespace Gui
   {
 
-    typedef enum RoundMode
-    {
-      Integer,
-      ThreeDigitsBinary,
-    } RoundMode;
-
     typedef struct Gauge
     {
-      const char *TitleText;
-      const char *Unit;
-      const float MinValue;
-      const float MaxValue;
-      const RoundMode ValueRounding;
-
       lv_obj_t *Arc;
       lv_style_t IndicatorStyle;
       lv_style_t MainStyle;
@@ -39,6 +26,7 @@ namespace Services
 
       lv_obj_t *ValueLabel;
       lv_style_t ValueStyle;
+
     } Gauge;
 
 
@@ -49,91 +37,30 @@ namespace Services
 
     void SetScreenBackground(lv_obj_t *screen, lv_color_t backgroundColor);
 
-    void DrawTitles(lv_obj_t *parent, lv_color_t textColor);
+    void InitializeTitles(lv_obj_t *parent, lv_color_t textColor);
 
-    void DrawArcs(lv_obj_t *parent, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor);
+    void InitializeArcs(lv_obj_t *parent, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor);
 
-    void DrawArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor);
+    void InitializeArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor);
 
-    void Update(CommunicationData *communicationData);
 
-    void Update(Gauge *gaugeStruct, float nextValue);
+    void OnRecievedInitializationCommandEvent(InitializationCommand *initializationCommand);
+
+    void OnRecievedUpdateCommandEvent(UpdateCommand *updateCommand);
+
+    void UpdateChart(Gauge *gaugeStruct, int16_t nextArcValue, const char *valueText);
 
     void OnAnimationUpdate(void *component, int32_t value);
 
 
-
-    Gauge Gauges[] =
-    {
-      {
-        .TitleText = "Utilization",
-        .Unit = "%",
-        .MinValue = 0.0f,
-        .MaxValue = 100.0f,
-        .ValueRounding = RoundMode::Integer,
-      },
-
-      {
-        .TitleText = "Wattage",
-        .Unit = "W",
-        .MinValue = 0.0f,
-        .MaxValue = 105.0f,
-        .ValueRounding = RoundMode::Integer,
-      },
-
-      {
-        .TitleText = "Temperature",
-        .Unit = "°C",
-        .MinValue = 0.0f,
-        .MaxValue = 105.0f,
-        .ValueRounding = RoundMode::Integer,
-      },
-
-      {
-        .TitleText = "Memory",
-        .Unit = "B",
-        .MinValue = 0.0f,
-        .MaxValue = 32768.0f,
-        .ValueRounding = RoundMode::ThreeDigitsBinary,
-      },
-
-      {
-        .TitleText = "Utilization",
-        .Unit = "%",
-        .MinValue = 0.0f,
-        .MaxValue = 100.0f,
-        .ValueRounding = RoundMode::Integer,
-      },
-
-      {
-        .TitleText = "Wattage",
-        .Unit = "W",
-        .MinValue = 0.0f,
-        .MaxValue = 230.0f,
-        .ValueRounding = RoundMode::Integer,
-      },
-
-      {
-        .TitleText = "Temperature",
-        .Unit = "°C",
-        .MinValue = 0.0f,
-        .MaxValue = 105.0f,
-        .ValueRounding = RoundMode::Integer,
-      },
-
-      {
-        .TitleText = "Memory",
-        .Unit = "B",
-        .MinValue = 0.0f,
-        .MaxValue = 8192.0f,
-        .ValueRounding = RoundMode::ThreeDigitsBinary,
-      },
-    };
-
-
-    const timespan_t ArcUpdateInterval_us = 1 * 1000 * 1000;
+    Gauge Gauges[8];
 
     const size_t GaugeCount = sizeof(Gauges) / sizeof(Gauge);
+
+
+    lv_obj_t *Title0;
+
+    lv_obj_t *Title1;
 
 
     lv_style_t ScreenStyle;
@@ -196,9 +123,13 @@ namespace Services
 
       DrawSeperationLine(screen, gray800);
 
-      DrawTitles(screen, textColor);
+      InitializeTitles(screen, textColor);
 
-      DrawArcs(screen, backgroundColor, arcEmptyColor, arcFillColor, textColor);
+      InitializeArcs(screen, backgroundColor, arcEmptyColor, arcFillColor, textColor);
+
+
+      Services::Communication::RecievedInitializationCommandEvent.Subscribe(OnRecievedInitializationCommandEvent);
+      Services::Communication::RecievedUpdateCommandEvent.Subscribe(OnRecievedUpdateCommandEvent);
     }
 
     void DrawSeperationLine(lv_obj_t *parent, lv_color_t lineColor)
@@ -219,32 +150,32 @@ namespace Services
       lv_obj_add_style(screen, &ScreenStyle, LV_PART_MAIN);
     }
 
-    void DrawTitles(lv_obj_t *parent, lv_color_t textColor)
+    void InitializeTitles(lv_obj_t *parent, lv_color_t textColor)
     {
       lv_style_set_text_align(&TitleStyle, LV_TEXT_ALIGN_CENTER);
       lv_style_set_text_font(&TitleStyle, &lv_font_montserrat_28);
       lv_style_set_text_color(&TitleStyle, textColor);
 
-      {
-        auto *cpuTitle = lv_label_create(parent);
-        lv_label_set_long_mode(cpuTitle, LV_LABEL_LONG_CLIP);
-        lv_label_set_text(cpuTitle, "AMD Ryzen 7 5800X");
-        lv_obj_set_size(cpuTitle, ArcWidth + GridSpacing + ArcWidth, TitleHeight);
-        lv_obj_set_pos(cpuTitle, GridSpacing + 1, GridSpacing + 1);
-        lv_obj_add_style(cpuTitle, &TitleStyle, LV_PART_MAIN);
-      }
 
-      {
-        auto *gpuTitle = lv_label_create(parent);
-        lv_label_set_long_mode(gpuTitle, LV_LABEL_LONG_CLIP);
-        lv_label_set_text(gpuTitle, "NVIDIA GeForce RTX 3070");
-        lv_obj_set_size(gpuTitle, ArcWidth + GridSpacing + ArcWidth, TitleHeight);
-        lv_obj_set_pos(gpuTitle, GridSpacing + ArcWidth + GridSpacing + ArcWidth + GridSpacing + LineThickness + GridSpacing + 1, GridSpacing + 1);
-        lv_obj_add_style(gpuTitle, &TitleStyle, LV_PART_MAIN);
-      }
+      Title0 = lv_label_create(parent);
+
+      lv_label_set_long_mode(Title0, LV_LABEL_LONG_CLIP);
+      lv_label_set_text(Title0, "");
+      lv_obj_set_size(Title0, ArcWidth + GridSpacing + ArcWidth, TitleHeight);
+      lv_obj_set_pos(Title0, GridSpacing + 1, GridSpacing + 1);
+      lv_obj_add_style(Title0, &TitleStyle, LV_PART_MAIN);
+
+  
+      Title1 = lv_label_create(parent);
+
+      lv_label_set_long_mode(Title1, LV_LABEL_LONG_CLIP);
+      lv_label_set_text(Title1, "");
+      lv_obj_set_size(Title1, ArcWidth + GridSpacing + ArcWidth, TitleHeight);
+      lv_obj_set_pos(Title1, GridSpacing + ArcWidth + GridSpacing + ArcWidth + GridSpacing + LineThickness + GridSpacing + 1, GridSpacing + 1);
+      lv_obj_add_style(Title1, &TitleStyle, LV_PART_MAIN);
     }
 
-    void DrawArcs(lv_obj_t *parent, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor)
+    void InitializeArcs(lv_obj_t *parent, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor)
     {
       auto y0 = GridSpacing + TitleHeight + 1;
       auto y1 = GridSpacing + TitleHeight + ArcHeight + GridSpacing + 1;
@@ -255,18 +186,18 @@ namespace Services
       auto x3 = GridSpacing + ArcWidth + GridSpacing + ArcWidth + GridSpacing + LineThickness + GridSpacing + ArcWidth + GridSpacing + 1;
 
 
-      DrawArc(parent, 0, x0, y0, backgroundColor, emptyColor, fillColor, textColor);
-      DrawArc(parent, 1, x1, y0, backgroundColor, emptyColor, fillColor, textColor);
-      DrawArc(parent, 2, x0, y1, backgroundColor, emptyColor, fillColor, textColor);
-      DrawArc(parent, 3, x1, y1, backgroundColor, emptyColor, fillColor, textColor);
+      InitializeArc(parent, 0, x0, y0, backgroundColor, emptyColor, fillColor, textColor);
+      InitializeArc(parent, 1, x1, y0, backgroundColor, emptyColor, fillColor, textColor);
+      InitializeArc(parent, 2, x0, y1, backgroundColor, emptyColor, fillColor, textColor);
+      InitializeArc(parent, 3, x1, y1, backgroundColor, emptyColor, fillColor, textColor);
 
-      DrawArc(parent, 4, x2, y0, backgroundColor, emptyColor, fillColor, textColor);
-      DrawArc(parent, 5, x3, y0, backgroundColor, emptyColor, fillColor, textColor);
-      DrawArc(parent, 6, x2, y1, backgroundColor, emptyColor, fillColor, textColor);
-      DrawArc(parent, 7, x3, y1, backgroundColor, emptyColor, fillColor, textColor);
+      InitializeArc(parent, 4, x2, y0, backgroundColor, emptyColor, fillColor, textColor);
+      InitializeArc(parent, 5, x3, y0, backgroundColor, emptyColor, fillColor, textColor);
+      InitializeArc(parent, 6, x2, y1, backgroundColor, emptyColor, fillColor, textColor);
+      InitializeArc(parent, 7, x3, y1, backgroundColor, emptyColor, fillColor, textColor);
     }
 
-    void DrawArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor)
+    void InitializeArc(lv_obj_t *parent, size_t index, lv_coord_t x, lv_coord_t y, lv_color_t backgroundColor, lv_color_t emptyColor, lv_color_t fillColor, lv_color_t textColor)
     {
       auto gaugeStruct = &Gauges[index];
 
@@ -306,12 +237,11 @@ namespace Services
       {
         auto titleLabel = lv_label_create(parent);
         auto titleStyle = &gaugeStruct->TitleStyle;
-        auto titleText = gaugeStruct->TitleText;
 
         gaugeStruct->TitleLabel = titleLabel;
 
         lv_label_set_long_mode(titleLabel, LV_LABEL_LONG_CLIP);
-        lv_label_set_text(titleLabel, titleText);
+        lv_label_set_text(titleLabel, "");
         lv_obj_set_size(titleLabel, ArcWidth, ArcTextHeight);
         lv_obj_set_pos(titleLabel, x, y + ArcHeight - ArcTextHeight);
 
@@ -344,64 +274,51 @@ namespace Services
     }
 
 
-    void Update(CommunicationData *communicationData)
+    void OnRecievedInitializationCommandEvent(InitializationCommand *initializationCommand)
     {
-      Update(&Gauges[0], communicationData->CpuUtilization);
-      Update(&Gauges[1], communicationData->CpuWattage);
-      Update(&Gauges[2], communicationData->CpuTemperature);
-      Update(&Gauges[3], communicationData->CpuMemory);
+      lv_label_set_text(Title0, initializationCommand->Tile0);
+      lv_label_set_text(Title1, initializationCommand->Tile1);
 
-      Update(&Gauges[4], communicationData->GpuUtilization);
-      Update(&Gauges[5], communicationData->GpuWattage);
-      Update(&Gauges[6], communicationData->GpuTemperature);
-      Update(&Gauges[7], communicationData->GpuMemory);
+      lv_label_set_text(Gauges[0].TitleLabel, initializationCommand->Chart0);
+      lv_label_set_text(Gauges[1].TitleLabel, initializationCommand->Chart1);
+      lv_label_set_text(Gauges[2].TitleLabel, initializationCommand->Chart2);
+      lv_label_set_text(Gauges[3].TitleLabel, initializationCommand->Chart3);
+
+      lv_label_set_text(Gauges[4].TitleLabel, initializationCommand->Chart4);
+      lv_label_set_text(Gauges[5].TitleLabel, initializationCommand->Chart5);
+      lv_label_set_text(Gauges[6].TitleLabel, initializationCommand->Chart6);
+      lv_label_set_text(Gauges[7].TitleLabel, initializationCommand->Chart7);
     }
 
-    void Update(Gauge *gaugeStruct, float nextValue)
+    void OnRecievedUpdateCommandEvent(UpdateCommand *updateCommand)
     {
-      {
-        auto valueLabel = gaugeStruct->ValueLabel;
+      UpdateChart(&Gauges[0], updateCommand->Ratio0, updateCommand->Text0);
+      UpdateChart(&Gauges[1], updateCommand->Ratio1, updateCommand->Text1);
+      UpdateChart(&Gauges[2], updateCommand->Ratio2, updateCommand->Text2);
+      UpdateChart(&Gauges[3], updateCommand->Ratio3, updateCommand->Text3);
 
-        if (gaugeStruct->ValueRounding == RoundMode::Integer)
-        {
-          char stringBuilder[15];
-          size_t stringBuilderLength = sizeof(stringBuilder) / sizeof(char);
+      UpdateChart(&Gauges[4], updateCommand->Ratio4, updateCommand->Text4);
+      UpdateChart(&Gauges[5], updateCommand->Ratio5, updateCommand->Text5);
+      UpdateChart(&Gauges[6], updateCommand->Ratio6, updateCommand->Text6);
+      UpdateChart(&Gauges[7], updateCommand->Ratio7, updateCommand->Text7);
+    }
 
-          snprintf(stringBuilder, stringBuilderLength, "%.0f ", nextValue);
-          strncat(stringBuilder, gaugeStruct->Unit, stringBuilderLength);
-
-          lv_label_set_text(valueLabel, stringBuilder);
-        }
-
-        if (gaugeStruct->ValueRounding == RoundMode::ThreeDigitsBinary)
-        {
-          char formattedValue[15];
-          size_t formattedValueLength = sizeof(formattedValue) / sizeof(char);
-
-          Formatter::FormatForBinary(nextValue * 1024.0f * 1024.0f, gaugeStruct->Unit, formattedValue, formattedValueLength);
-
-          lv_label_set_text(valueLabel, formattedValue);
-        }
-      }
-
-      {
-        auto arc = gaugeStruct->Arc;
-
-        auto currentArcValue = lv_arc_get_value(arc);
-        auto mappedNextValue = Math::Map<float>(nextValue, gaugeStruct->MinValue, gaugeStruct->MaxValue, 0.0f, 32767.0f);
-        auto nextArcValue = (int16_t)Math::Clamp<float>(roundf(mappedNextValue), 0.0f, 32767.0f);
+    void UpdateChart(Gauge *gaugeStruct, int16_t nextArcValue, const char *valueText)
+    {
+      lv_label_set_text(gaugeStruct->ValueLabel, valueText);
 
 
-        auto indicatorAnimation = &gaugeStruct->IndicatorAnimation;
+      auto arc = gaugeStruct->Arc;
+      auto currentArcValue = lv_arc_get_value(arc);
+      auto indicatorAnimation = &gaugeStruct->IndicatorAnimation;
 
-        lv_anim_set_exec_cb(indicatorAnimation, OnAnimationUpdate); 
-        lv_anim_set_values(indicatorAnimation, currentArcValue, nextArcValue);
-        lv_anim_set_var(indicatorAnimation, arc);
-        lv_anim_set_time(indicatorAnimation, 950);
-        lv_anim_set_path_cb(indicatorAnimation, lv_anim_path_ease_in_out);
+      lv_anim_set_exec_cb(indicatorAnimation, OnAnimationUpdate); 
+      lv_anim_set_values(indicatorAnimation, currentArcValue, nextArcValue);
+      lv_anim_set_var(indicatorAnimation, arc);
+      lv_anim_set_time(indicatorAnimation, 950);
+      lv_anim_set_path_cb(indicatorAnimation, lv_anim_path_ease_in_out);
 
-        lv_anim_start(indicatorAnimation);
-      }
+      lv_anim_start(indicatorAnimation);
     }
 
     void OnAnimationUpdate(void *component, int32_t value)
@@ -410,6 +327,5 @@ namespace Services
 
       lv_arc_set_value(arc, value);
     }
-
-  } // namespace Display
-} // namespace Services
+  }
+}
